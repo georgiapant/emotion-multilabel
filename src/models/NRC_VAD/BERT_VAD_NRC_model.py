@@ -3,11 +3,12 @@ import torch.nn as nn
 from transformers import BertForSequenceClassification
 import torch
 import torch.nn.functional as F
+from sparsemax import Sparsemax
 
 
 class BertClassifier(nn.Module):
 
-    def __init__(self, num_labels, BERT_MODEL, freeze_bert=False):
+    def __init__(self, num_labels, BERT_MODEL, freeze_bert=False, use_sparsemax=False):
 
         super(BertClassifier, self).__init__()
         # Specify hidden size of BERT, hidden size of our classifier, and number of labels
@@ -21,17 +22,23 @@ class BertClassifier(nn.Module):
         self.fc = nn.Linear(D_in, H)
         self.label = nn.Linear(H, D_out)
         self.dropout = nn.Dropout(0.3)
+        self.use_sparsemax = use_sparsemax
+        self.sparsemax = Sparsemax(dim=1)
 
         # Freeze the BERT model
         if freeze_bert:
             for param in self.bert.parameters():
                 param.requires_grad = False
 
-    def attention_net(self, input_matrix, final_output_cls):
+    def attention_net(self, Key, final_output_cls):
         hidden = final_output_cls
-        attn_weights = torch.bmm(input_matrix, hidden.unsqueeze(2)).squeeze(2)
-        soft_attn_weights = F.softmax(attn_weights, 1)
-        new_hidden_state = torch.bmm(input_matrix.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
+        attn_weights = torch.bmm(Key, hidden.unsqueeze(2)).squeeze(2)
+        if self.use_sparsemax:
+            soft_attn_weights = self.sparsemax(attn_weights / 1.3)  # They also add sparcity (1.3)
+        else:
+            soft_attn_weights = F.softmax(attn_weights, 1)
+
+        new_hidden_state = torch.bmm(Key.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
         return new_hidden_state
 
     def forward(self, input_ids, attention_mask, nrc_feats, vad_vec):

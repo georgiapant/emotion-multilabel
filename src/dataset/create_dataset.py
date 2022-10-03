@@ -20,6 +20,15 @@ class CreateDataset:
             weights[i] = compute_class_weight('balanced', classes=[0, 1], y=y_true[class_names[i]])
         return weights
 
+    def pos_weights(self, y_true, class_names):
+        # print(y_true)
+        weights = []
+        for i in range(len(class_names)):
+            num_pos = np.sum(y_true[class_names[i]])
+            num_neg = len(y_true[class_names[i]]) - num_pos
+            weights.append(num_neg/num_pos)
+        return weights
+
     def goemotions(self, drop_neutral=False, with_weights=False):
 
         stats = pd.DataFrame()
@@ -83,6 +92,7 @@ class CreateDataset:
 
         if with_weights:
             weights = self.calculating_class_weights(y_train, labels)
+            # weights = self.pos_weights(y_train, labels)
             print(f'The weights of the classes are:\n {weights}')
 
         return X_train, y_train, X_val, y_val, X_test, y_test, labels, weights
@@ -107,3 +117,41 @@ class CreateDataset:
         y_val = temp.drop(['Text'], axis=1)
 
         return X_train, y_train, X_val, y_val, X_test, y_test
+
+    def ec(self, with_weights=False):
+        data_ec_val = pd.read_csv(self.project_root_path + "/data/ec/2018-E-c-En-dev.txt",
+            sep='	', encoding="utf-8", header=0)
+        data_ec_test = pd.read_csv(self.project_root_path + "/data/ec/2018-E-c-En-test-gold.txt",
+             sep='	', encoding="utf-8", header=0)
+        data_ec_train = pd.read_csv(self.project_root_path + "/data/ec/2018-E-c-En-train.txt",
+            sep='	', encoding="utf-8", header=0)
+
+        stats = pd.DataFrame()
+        weights = None
+
+        data_ec_val.rename(columns={"Tweet": "Text"}, inplace=True)
+        data_ec_test.rename(columns={"Tweet": "Text"}, inplace=True)
+        data_ec_train.rename(columns={"Tweet": "Text"}, inplace=True)
+
+        X_train = data_ec_train['Text'].values
+        y_train = data_ec_train.drop(columns=['Text', 'ID'])
+
+        X_val = data_ec_val['Text'].values
+        y_val = data_ec_val.drop(columns=['Text', 'ID'])
+
+        X_test = data_ec_test['Text'].values
+        y_test = data_ec_test.drop(columns=['Text', 'ID'])
+
+        stats = pd.DataFrame()
+        stats['Train'] = y_train.sum(axis=0)
+        stats['Val'] = y_val.sum(axis=0)
+        stats['Test'] = y_test.sum(axis=0)
+        labels = y_train.columns
+        print(stats)
+
+        if with_weights:
+            weights = self.calculating_class_weights(y_train, labels)
+            # weights = self.pos_weights(y_train, labels)
+            print(f'The weights of the classes are:\n {weights}')
+
+        return X_train, y_train, X_val, y_val, X_test, y_test, labels, weights

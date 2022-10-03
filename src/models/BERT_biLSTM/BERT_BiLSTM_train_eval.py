@@ -1,30 +1,20 @@
 import sys
-
-sys.path.append("./")
-import json
-from sklearn.model_selection import train_test_split
-# from src.config import BATCH_SIZE, MAX_LEN, EPOCHS, patience, BERT_MODEL, RANDOM_SEED, project_root_path
 import torch
-from transformers import BertModel, BertTokenizer, XLMRobertaTokenizer, \
-    XLMRobertaModel  # ,BertForSequenceClassification
+from transformers import BertTokenizer
 import torch.nn as nn
 from transformers import AdamW, get_linear_schedule_with_warmup
 import time
-import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 import gc
-from collections import Counter
 from sklearn import metrics
-from sklearn.metrics import accuracy_score, f1_score, classification_report, jaccard_score, precision_recall_curve
+from sklearn.metrics import f1_score, classification_report, jaccard_score, precision_recall_curve
 from src.features.preprocess_feature_creation import create_dataloaders_BERT
 from src.pytorchtools import EarlyStopping
 from src.helpers import format_time, set_seed
 from src.dataset.create_dataset import CreateDataset
 from src.models.BERT_biLSTM import BERT_BiLSTM_model
 
-
-# sys.path.append(project_root_path)
 gc.collect()
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -32,14 +22,15 @@ np.seterr(divide='ignore', invalid='ignore')
 class BertBilstm:
 
     def __init__(self, dataset, drop_neutral, weighted_loss, thresholds_opt, BATCH_SIZE, MAX_LEN, EPOCHS, patience,
-                 BERT_MODEL, bidirectional, mlm_weight, RANDOM_SEED, project_root_path):
+                 BERT_MODEL, bidirectional, mlm_weight, RANDOM_SEED, project_root_path, es, scheduler, use_sparsemax):
         self.device = torch.device('cuda')
         print('GPU:', torch.cuda.get_device_name(0))
 
         self.loss_fn = nn.BCEWithLogitsLoss()
         self.tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
-        self.tokenizer.save_pretrained(project_root_path+"/models/tokenizer_simple/")
+        self.tokenizer.save_pretrained(project_root_path + "/models/tokenizer_simple/")
 
+        self.es = es
         self.EPOCHS = EPOCHS
         self.patience = patience
         self.MAX_LEN = MAX_LEN
@@ -55,13 +46,20 @@ class BertBilstm:
         if dataset == 'goemotions':
             self.X_train, self.y_train, self.X_val, self.y_val, self.X_test, self.y_test, self.labels, self.weights \
                 = create_dataset.goemotions(drop_neutral=drop_neutral, with_weights=weighted_loss)
-        # elif dataset == 'ec':
-        #     self.X_train, self.y_train, self.X_val, self.y_val, self.X_test, self.y_test \
-        #         = create_dataset.ec(drop_neutral=drop_neutral)
+        elif dataset == 'ec':
+            self.X_train, self.y_train, self.X_val, self.y_val, self.X_test, self.y_test, self.labels, self.weights \
+                = create_dataset.ec(with_weights=weighted_loss)
         else:
             print("No dataset with the name {}".format(dataset))
 
         self.num_labels = len(self.labels)
+
+        if scheduler != 'linear':
+            raise Exception("Only linear scheduler for this model, if you want to use {} scheduler use BERT_vad_nrc model".format(
+                scheduler))
+
+        if use_sparsemax:
+            raise Exception("Cannot use sparsemax with this model, use BERT_vad_nrc model instead")
 
     def get_weighted_loss(self, logits, labels_true, weights):
         # loss_fn = nn.BCEWithLogitsLoss()
@@ -128,8 +126,9 @@ class BertBilstm:
             y_pred = self.logits_to_labels(probs)
 
         accuracy = jaccard_score(labels_true, y_pred, average='samples')
+        fscore_macro = f1_score(labels_true, y_pred, average='macro')
 
-        return auc_micro, accuracy, thresholds
+        return auc_micro, accuracy, thresholds, fscore_macro
 
     def logits_to_labels(self, logits, threshold=0.3):
         y_pred_labels = np.zeros_like(logits)
@@ -181,10 +180,9 @@ class BertBilstm:
         model.eval()
 
         # Tracking variables
-        val_accuracy = []
         val_loss = []
-        val_auc_micro = []
-        val_thresholds = []
+        logits_all = []
+        b_labels_all = []
 
         # For each batch in our validation set...
         for batch in val_dataloader:
@@ -196,8 +194,6 @@ class BertBilstm:
                 logits = model(b_input_ids, b_attn_mask)
 
             # Compute loss
-
-            # b_labels = b_labels.type(torch.LongTensor).to(self.device)
             b_labels = b_labels.float().to(self.device)
             if self.weighted_loss:
                 loss = self.get_weighted_loss(logits, b_labels, self.weights)
@@ -205,20 +201,19 @@ class BertBilstm:
                 loss = self.loss_fn(logits, b_labels)
 
             val_loss.append(loss.item())
-
+            logits_all.append(logits)
+            b_labels_all.append(b_labels)
             # Get the predictions
-            auc_micro, accuracy, thresholds = self.monitor_metrics(logits, b_labels)
-            val_auc_micro.append(auc_micro)
-            val_accuracy.append(accuracy)
-            val_thresholds.append(thresholds)
+
+        logits_all = torch.cat(logits_all, dim=0)
+        b_labels_all = torch.cat(b_labels_all, dim=0)
+
+        val_auc, val_accuracy, val_thresholds, val_f1 = self.monitor_metrics(logits_all, b_labels_all)
 
         # Compute the average accuracy and loss over the validation set.
         val_loss = np.mean(val_loss)
-        val_accuracy = np.mean(val_accuracy)
-        val_auc = np.mean(val_auc_micro)
-        val_thresholds = np.mean(val_thresholds, axis=0)
 
-        return val_loss, val_accuracy, val_auc, val_thresholds
+        return val_loss, val_accuracy, val_auc, val_thresholds, val_f1
 
     def train(self, model, train_dataloader, val_dataloader=None, optimizer=None, scheduler=None,
               evaluation=False):
@@ -227,7 +222,7 @@ class BertBilstm:
         """
         # Start training loop
         print("Start training...\n", flush=True)
-        early_stopping = EarlyStopping(patience=self.patience, verbose=True)
+        early_stopping = EarlyStopping(metric=self.es, patience=self.patience, verbose=True)
         t0 = time.time()
         threshold_list = []
         thresholds_fin = []
@@ -239,7 +234,8 @@ class BertBilstm:
             # =======================================
             # Print the header of the result table
             print(
-                f"{'Epoch':^7} | {'Batch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Val Acc':^9} | {'Val Auc': ^9}| {'Elapsed':^12} | {'Elapsed Total':^12}",
+                f"{'Epoch':^7} | {'Batch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Val Acc':^9} | {'Val Auc': ^9}"
+                f"| {'Elapsed':^12} | {'Elapsed Total':^12}",
                 flush=True)
             print("-" * 100, flush=True)
 
@@ -291,7 +287,8 @@ class BertBilstm:
                     time_elapsed_total = format_time(time.time() - t0_epoch)
                     # Print training results
                     print(
-                        f"{epoch_i + 1:^7} | {step:^7} | {batch_loss / batch_counts:^12.6f} | {'-':^10} | {'-':^9} | {'-':^9}|{time_elapsed_batch:^12} | {time_elapsed_total:^12}",
+                        f"{epoch_i + 1:^7} | {step:^7} | {batch_loss / batch_counts:^12.6f} | {'-':^10} | {'-':^9} "
+                        f"| {'-':^9}|{time_elapsed_batch:^12} | {time_elapsed_total:^12}",
                         flush=True)
 
                     # Reset batch tracking variables
@@ -305,24 +302,32 @@ class BertBilstm:
             # =======================================
             #               Evaluation
             # =======================================
-            if evaluation == True:
+            if evaluation:
                 # After the completion of each training epoch, measure the model's performance
                 # on our validation set.
-                val_loss, val_accuracy, val_auc, thresholds = self.validation(model, val_dataloader)
+                val_loss, val_accuracy, val_auc, thresholds, val_f1 = self.validation(model, val_dataloader)
 
                 # Print performance over the entire training data
                 time_elapsed = format_time(time.time() - t0_epoch)
                 threshold_list.append(thresholds)
 
                 print(
-                    f"{'Epoch':^7} | {'Batch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Val Acc':^9} | {'Val Auc': ^9}| {'Elapsed':^12} | {'Elapsed Total':^12}",
+                    f"{'Epoch':^7} | {'Batch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Val Acc':^9} "
+                    f"| {'Val Auc': ^9}| {'Elapsed':^12} | {'Elapsed Total':^12}",
                     flush=True)
                 print("-" * 100, flush=True)
                 print(
-                    f"{epoch_i + 1:^7} | {'-':^7} | {avg_train_loss:^12.6f} | {val_loss:^10.6f} | {val_accuracy:^9.2f} | {val_auc:^9.6f}| | {'-':^12}| {time_elapsed:^12}",
+                    f"{epoch_i + 1:^7} | {'-':^7} | {avg_train_loss:^12.6f} | {val_loss:^10.6f} | {val_accuracy:^9.2f} "
+                    f"| {val_auc:^9.6f}| | {'-':^12}| {time_elapsed:^12}",
                     flush=True)
                 print("-" * 100)
-                early_stopping(val_loss, model)
+
+                if self.es == 'f1':
+                    early_stopping(val_f1, model)
+                elif self.es == 'loss':
+                    early_stopping(val_loss, model)
+                else:
+                    torch.save(model.state_dict(), self.project_root_path + '/models/checkpoint.pt')
 
                 if early_stopping.early_stop:
                     print("Early stopping")
@@ -361,7 +366,8 @@ class BertBilstm:
         model.eval()
 
         tokenizer = BertTokenizer.from_pretrained(self.project_root_path + "/models/tokenizer_simple/")
-        test_dataloader = create_dataloaders_BERT(X_test, y_test, tokenizer, self.MAX_LEN, self.BATCH_SIZE, sampler='sequential',
+        test_dataloader = create_dataloaders_BERT(X_test, y_test, tokenizer, self.MAX_LEN, self.BATCH_SIZE,
+                                                  sampler='sequential',
                                                   token_type=False, concept=False)
         all_logits = []
 
@@ -386,10 +392,11 @@ class BertBilstm:
         return all_logits
 
     def main(self):
-        t0=time.time()
+        t0 = time.time()
         # X_train, y_train, X_val, y_val, X_test, y_test = health_bin()
 
-        train_dataloader = create_dataloaders_BERT(self.X_train, self.y_train, self.tokenizer, self.MAX_LEN, self.BATCH_SIZE,
+        train_dataloader = create_dataloaders_BERT(self.X_train, self.y_train, self.tokenizer, self.MAX_LEN,
+                                                   self.BATCH_SIZE,
                                                    sampler='random', token_type=False, concept=False)
         val_dataloader = create_dataloaders_BERT(self.X_val, self.y_val, self.tokenizer, self.MAX_LEN, self.BATCH_SIZE,
                                                  sampler='sequential', token_type=False, concept=False)
@@ -402,7 +409,8 @@ class BertBilstm:
                                                                       BERT_MODEL=self.BERT_MODEL,
                                                                       bidirectional=self.bidirectional)
 
-        thresholds = self.train(bert_classifier, train_dataloader, val_dataloader, optimizer, scheduler, evaluation=True)
+        thresholds = self.train(bert_classifier, train_dataloader, val_dataloader, optimizer, scheduler,
+                                evaluation=True)
 
         for batch in train_dataloader:
             b_input_ids, b_attn_mask = tuple(t.to(self.device) for t in batch)[:2]
@@ -410,7 +418,8 @@ class BertBilstm:
 
             if self.bidirectional:
                 if self.weighted_loss:
-                    torch.jit.save(model_scripted, self.project_root_path + '/models/model_scripted_BERT_BiLSTM_weighted_loss.pt')
+                    torch.jit.save(model_scripted,
+                                   self.project_root_path + '/models/model_scripted_BERT_BiLSTM_weighted_loss.pt')
                     break
                 else:
                     torch.jit.save(model_scripted, self.project_root_path + '/models/model_scripted_BERT_BiLSTM.pt')
@@ -418,7 +427,8 @@ class BertBilstm:
 
             else:
                 if self.weighted_loss:
-                    torch.jit.save(model_scripted, self.project_root_path + '/models/model_scripted_BERT_LSTM_weighted_loss.pt')
+                    torch.jit.save(model_scripted,
+                                   self.project_root_path + '/models/model_scripted_BERT_LSTM_weighted_loss.pt')
                     break
                 else:
                     torch.jit.save(model_scripted, self.project_root_path + '/models/model_scripted_BERT_LSTM.pt')

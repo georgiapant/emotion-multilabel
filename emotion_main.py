@@ -21,7 +21,9 @@ parser.add_argument('--random_seed', type=int, default=42)
 parser.add_argument('--weighted_loss', type=bool, default=False)
 parser.add_argument('--threshold_opt', type=bool, default=False)
 parser.add_argument('--mlm_weight', type=float, default=0.5)
-# parser.add_argument('--batch_size', type=int, default=8)
+parser.add_argument('--es', type=str, default='f1')
+parser.add_argument('--scheduler', type=str, default='linear')
+parser.add_argument('--sparsemax', type=bool, default=False)
 
 
 BERT_MODEL = 'bert-base-uncased'
@@ -38,5 +40,5 @@ else:
 
 model = model_cls(args.dataset, args.drop_neutral, args.weighted_loss, args.threshold_opt, args.batch_size,
                   args.max_len, args.epochs, args.patience, BERT_MODEL, bidirectional, args.mlm_weight,
-                  args.random_seed, project_root_path)
+                  args.random_seed, project_root_path, args.es, args.scheduler, args.sparsemax)
 model.main()
