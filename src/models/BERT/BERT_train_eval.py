@@ -409,7 +409,7 @@ class BertSimple:
                                self.project_root_path + '/models/model_scripted_BERT_simple_weighted_loss.pt')
                 break
             else:
-                torch.jit.save(model_scripted, self.project_root_path + '/models/model_scripted_BERT_Simple.pt')
+                torch.jit.save(model_scripted, self.project_root_path + '/models/model_scripted_BERT_simple.pt')
                 break
 
         print("Validation set", flush=True)

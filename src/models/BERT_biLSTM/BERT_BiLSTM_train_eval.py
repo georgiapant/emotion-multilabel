@@ -445,6 +445,7 @@ class BertBilstm:
 
         print("Test set", flush=True)
         logits_test = self.bert_predict(self.X_test)
+
         if self.thresholds_opt:
             print("The thresholds are: {}".format(thresholds), flush=True)
             self.evaluate(logits_test, self.y_test, thresholds)

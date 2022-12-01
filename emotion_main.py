@@ -12,7 +12,6 @@ MODELS = {"BERT": BertSimple, "BERT_bilstm": BertBilstm, "BERT_lstm": BertBilstm
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default='BERT')
 parser.add_argument('--dataset', type=str, default='goemotions')
-parser.add_argument('--drop_neutral', type=bool, default=False)
 parser.add_argument('--max_len', type=int, default=126)
 parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--epochs', type=int, default=10)

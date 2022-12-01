@@ -203,7 +203,6 @@ def create_dataloaders_BERT(X, y, tokenizer, MAX_LEN, BATCH_SIZE, concepts=None,
 
         tensor_data = inputs, token_type_ids, masks
 
-
     elif token_type == False and concept == False:
         inputs, _, masks = preprocessing_for_bert(X, tokenizer, MAX_LEN, token_type=False)
         tensor_data = inputs, masks
