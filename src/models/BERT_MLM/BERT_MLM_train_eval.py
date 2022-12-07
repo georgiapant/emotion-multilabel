@@ -32,7 +32,7 @@ class BertMLM:
 
         self.loss_fn = nn.BCEWithLogitsLoss()
         self.tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
-        self.tokenizer.save_pretrained(project_root_path+"/models/tokenizer_simple/")
+        self.tokenizer.save_pretrained(project_root_path+"/models/tokenizer/")
 
         self.EPOCHS = EPOCHS
         self.patience = patience
@@ -391,7 +391,7 @@ class BertMLM:
 
         model.eval()
 
-        tokenizer = BertTokenizer.from_pretrained(self.project_root_path + "/models/tokenizer_simple/")
+        tokenizer = BertTokenizer.from_pretrained(self.project_root_path + "/models/tokenizer/")
         test_dataloader = create_dataloaders_BERT(X_test, y_test, tokenizer, self.MAX_LEN, self.BATCH_SIZE, sampler='sequential',
                                                   token_type=True, concept=False)
         all_logits = []

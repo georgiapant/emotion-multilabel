@@ -28,7 +28,7 @@ class BertBilstm:
 
         self.loss_fn = nn.BCEWithLogitsLoss()
         self.tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
-        self.tokenizer.save_pretrained(project_root_path + "/models/tokenizer_simple/")
+        self.tokenizer.save_pretrained(project_root_path + "/models/tokenizer/")
 
         self.es = es
         self.EPOCHS = EPOCHS
@@ -365,7 +365,7 @@ class BertBilstm:
 
         model.eval()
 
-        tokenizer = BertTokenizer.from_pretrained(self.project_root_path + "/models/tokenizer_simple/")
+        tokenizer = BertTokenizer.from_pretrained(self.project_root_path + "/models/tokenizer/")
         test_dataloader = create_dataloaders_BERT(X_test, y_test, tokenizer, self.MAX_LEN, self.BATCH_SIZE,
                                                   sampler='sequential',
                                                   token_type=False, concept=False)

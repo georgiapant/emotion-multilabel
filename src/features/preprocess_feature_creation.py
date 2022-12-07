@@ -6,13 +6,7 @@ import torch
 import json
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-# from src.config import project_root_path
 from src.helpers import convert_to_unicode, run_strip_accents
-import sys
-
-
-# sys.path.append(project_root_path)
-
 
 def fix_encoding(text):
     text = re.sub("[\x8b]", ' ', text)
@@ -131,10 +125,6 @@ def preprocessing_for_bert(data, tokenizer, MAX_LEN, token_type=False):
         if token_type:
             token_type_ids.append(encoded_sent.get('token_type_ids'))
 
-    # Convert lists to tensors
-    # input_ids = torch.tensor(input_ids)
-    # attention_masks = torch.tensor(attention_masks)
-
     input_ids = torch.cat(input_ids, dim=0)
     attention_masks = torch.cat(attention_masks, dim=0)
 
@@ -190,17 +180,19 @@ def nrc_feats(input_ids, tokenizer):
 
 def create_dataloaders_BERT(X, y, tokenizer, MAX_LEN, BATCH_SIZE, concepts=None, sampler='sequential',
                             token_type=False, concept=False):
+    """
+    Takes the X and y and creates the bert dataloaders. It has the option to both return or not token_type_ids.
+    The concept is additional textual features that need to be processed similarly to the text and extract input ids and masks
+    """
     print('Tokenizing data...', flush=True)
 
     if token_type == True and concept == True:
         inputs, token_type_ids, masks = preprocessing_for_bert(X, tokenizer, MAX_LEN, token_type=True)
         inputs_concept, _, mask_concept = preprocessing_for_bert(concepts, tokenizer, MAX_LEN, token_type=False)
-
         tensor_data = inputs, token_type_ids, masks, inputs_concept, mask_concept
 
     elif token_type == True and concept == False:
         inputs, token_type_ids, masks = preprocessing_for_bert(X, tokenizer, MAX_LEN, token_type=True)
-
         tensor_data = inputs, token_type_ids, masks
 
     elif token_type == False and concept == False:
@@ -221,6 +213,7 @@ def create_dataloaders_BERT(X, y, tokenizer, MAX_LEN, BATCH_SIZE, concepts=None,
         sampler = SequentialSampler(data)
     elif sampler == 'random':
         sampler = RandomSampler(data)
+
     dataloader = DataLoader(data, sampler=sampler, batch_size=BATCH_SIZE)
     print('Done', flush=True)
     return dataloader
