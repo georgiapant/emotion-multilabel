@@ -178,30 +178,21 @@ def nrc_feats(input_ids, tokenizer):
     return feat
 
 
-def create_dataloaders_BERT(X, y, tokenizer, MAX_LEN, BATCH_SIZE, concepts=None, sampler='sequential',
-                            token_type=False, concept=False):
+def create_dataloaders_BERT(X, y, tokenizer, MAX_LEN, BATCH_SIZE, sampler='sequential',
+                            token_type=False):
     """
     Takes the X and y and creates the bert dataloaders. It has the option to both return or not token_type_ids.
     The concept is additional textual features that need to be processed similarly to the text and extract input ids and masks
     """
     print('Tokenizing data...', flush=True)
 
-    if token_type == True and concept == True:
-        inputs, token_type_ids, masks = preprocessing_for_bert(X, tokenizer, MAX_LEN, token_type=True)
-        inputs_concept, _, mask_concept = preprocessing_for_bert(concepts, tokenizer, MAX_LEN, token_type=False)
-        tensor_data = inputs, token_type_ids, masks, inputs_concept, mask_concept
-
-    elif token_type == True and concept == False:
+    if token_type:
         inputs, token_type_ids, masks = preprocessing_for_bert(X, tokenizer, MAX_LEN, token_type=True)
         tensor_data = inputs, token_type_ids, masks
 
-    elif token_type == False and concept == False:
+    else:
         inputs, _, masks = preprocessing_for_bert(X, tokenizer, MAX_LEN, token_type=False)
         tensor_data = inputs, masks
-
-    else:
-        inputs_concept, _, mask_concept = preprocessing_for_bert(concepts, tokenizer, MAX_LEN, token_type=False)
-        tensor_data = inputs_concept, mask_concept
 
     if y is None:
         data = TensorDataset(*tensor_data)

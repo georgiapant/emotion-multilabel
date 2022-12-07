@@ -362,7 +362,7 @@ class BertSimple:
 
         tokenizer = BertTokenizer.from_pretrained(self.project_root_path + "/models/tokenizer/")
         test_dataloader = create_dataloaders_BERT(X_test, y_test, tokenizer, self.MAX_LEN, self.BATCH_SIZE,
-                                                  sampler='sequential', token_type=False, concept=False)
+                                                  sampler='sequential', token_type=False)
         all_logits = []
 
         # For each batch in our test set...
@@ -387,9 +387,9 @@ class BertSimple:
         t0 = time.time()
 
         train_dataloader = create_dataloaders_BERT(self.X_train, self.y_train, self.tokenizer, self.MAX_LEN,
-                                                   self.BATCH_SIZE, sampler='random', token_type=False, concept=False)
+                                                   self.BATCH_SIZE, sampler='random', token_type=False)
         val_dataloader = create_dataloaders_BERT(self.X_val, self.y_val, self.tokenizer, self.MAX_LEN, self.BATCH_SIZE,
-                                                 sampler='sequential', token_type=False, concept=False)
+                                                 sampler='sequential', token_type=False)
 
         set_seed(self.RANDOM_SEED)  # Set seed for reproducibility
 

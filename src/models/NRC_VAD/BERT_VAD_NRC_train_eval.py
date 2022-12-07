@@ -390,19 +390,21 @@ class BertVadNrc:
 
         tokenizer = BertTokenizer.from_pretrained(self.project_root_path + "/models/tokenizer/")
         test_dataloader = create_dataloaders_BERT(X_test, y_test, tokenizer, self.MAX_LEN, self.BATCH_SIZE,
-                                                  sampler='sequential', token_type=False, concept=False)
+                                                  sampler='sequential', token_type=False)
 
         if self.use_sparsemax:
-            if self.scheduler=='chained':
+            if self.scheduler == 'chained':
                 model, optimizer, scheduler, scheduler2 = self.initialize_model(test_dataloader, epochs=self.EPOCHS,
-                                                                    num_labels=self.num_labels,
-                                                                    BERT_MODEL=self.BERT_MODEL)
+                                                                                num_labels=self.num_labels,
+                                                                                BERT_MODEL=self.BERT_MODEL)
             else:
                 model, optimizer, scheduler = self.initialize_model(test_dataloader, epochs=self.EPOCHS,
-                                                                    num_labels=self.num_labels, BERT_MODEL=self.BERT_MODEL)
+                                                                    num_labels=self.num_labels,
+                                                                    BERT_MODEL=self.BERT_MODEL)
 
             if self.weighted_loss:
-                model.load_state_dict(torch.load(self.project_root_path + '/models/model_sparse_BERT_vad_nrc_weighted_loss.pt'))
+                model.load_state_dict(
+                    torch.load(self.project_root_path + '/models/model_sparse_BERT_vad_nrc_weighted_loss.pt'))
             else:
                 model.load_state_dict(torch.load(self.project_root_path + '/models/model_sparse_BERT_vad_nrc.pt'))
 
@@ -439,9 +441,9 @@ class BertVadNrc:
         t0 = time.time()
 
         train_dataloader = create_dataloaders_BERT(self.X_train, self.y_train, self.tokenizer, self.MAX_LEN,
-                                                   self.BATCH_SIZE, sampler='random', token_type=False, concept=False)
+                                                   self.BATCH_SIZE, sampler='random', token_type=False)
         val_dataloader = create_dataloaders_BERT(self.X_val, self.y_val, self.tokenizer, self.MAX_LEN, self.BATCH_SIZE,
-                                                 sampler='sequential', token_type=False, concept=False)
+                                                 sampler='sequential', token_type=False)
 
         set_seed(self.RANDOM_SEED)  # Set seed for reproducibility
 
