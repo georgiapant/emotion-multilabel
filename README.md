@@ -54,3 +54,7 @@ the below command needs to be executed
 ```python
 python -m emotion_main --model BERT_vad_nrc --weighted_loss True --scheduler chained
 ```
+
+### Contact for further details
+
+- Georgia Pantalona (georgia.pant@gmail.com)
