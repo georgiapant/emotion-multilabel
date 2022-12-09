@@ -27,8 +27,8 @@ class BertMLM:
 
     def __init__(self, dataset, drop_neutral, weighted_loss, thresholds_opt, BATCH_SIZE, MAX_LEN, EPOCHS, patience,
                  BERT_MODEL, bidirectional, mlm_weight, RANDOM_SEED, project_root_path):
-        self.device = torch.device('cuda')
-        print('GPU:', torch.cuda.get_device_name(0))
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("Using {} for inference".format(self.device))
 
         self.loss_fn = nn.BCEWithLogitsLoss()
         self.tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
@@ -385,9 +385,9 @@ class BertMLM:
 
         if self.weighted_loss:
             model = torch.jit.load(
-                self.project_root_path + '/models/model_scripted_BERT_MLM_weighted_loss.pt')
+                self.project_root_path + '/models/model_scripted_BERT_MLM_weighted_loss.pt', map_location=torch.device(self.device))
         else:
-            model = torch.jit.load(self.project_root_path + '/models/model_scripted_BERT_MLM.pt')
+            model = torch.jit.load(self.project_root_path + '/models/model_scripted_BERT_MLM.pt', map_location=torch.device(self.device))
 
         model.eval()
 

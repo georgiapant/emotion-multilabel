@@ -23,8 +23,8 @@ class BertVadNrc:
     def __init__(self, dataset, drop_neutral, weighted_loss, thresholds_opt, BATCH_SIZE, MAX_LEN, EPOCHS, patience,
                  BERT_MODEL, bidirectional, mlm_weight, RANDOM_SEED, project_root_path, es, scheduler, use_sparsemax):
 
-        self.device = torch.device('cuda')
-        print('GPU:', torch.cuda.get_device_name(0))
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("Using {} for inference".format(self.device))
 
         self.loss_fn = nn.BCEWithLogitsLoss()
         self.tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
@@ -410,10 +410,10 @@ class BertVadNrc:
 
         else:
             if self.weighted_loss:
-                model = torch.jit.load(self.project_root_path + '/models/model_scripted_BERT_vad_nrc_weighted_loss.pt')
+                model = torch.jit.load(self.project_root_path + '/models/model_scripted_BERT_vad_nrc_weighted_loss.pt',map_location=torch.device(self.device))
 
             else:
-                model = torch.jit.load(self.project_root_path + '/models/model_scripted_BERT_vad_nrc.pt')
+                model = torch.jit.load(self.project_root_path + '/models/model_scripted_BERT_vad_nrc.pt', map_location=torch.device(self.device))
 
         model.eval()
 
