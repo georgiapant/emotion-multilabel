@@ -29,7 +29,7 @@ pip install -r requirements.txt
 ```
 Then run the following command:
 
-```python
+```bash
 python -m emotion_main
 ```
 
@@ -51,7 +51,7 @@ _patience_ (default: `3`) - number of epochs to be patient for early stopping
 
 For example, to execute the experiment with the BERT vad nrc model with the weighted loss and the chained scheduler 
 the below command needs to be executed
-```python
+```bash
 python -m emotion_main --model BERT_vad_nrc --weighted_loss True --scheduler chained
 ```
 

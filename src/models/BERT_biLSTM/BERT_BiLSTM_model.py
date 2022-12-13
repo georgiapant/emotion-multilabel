@@ -1,5 +1,4 @@
 import torch.nn as nn
-# from src.config import BERT_MODEL, num_labels
 from transformers import BertModel
 import torch
 
